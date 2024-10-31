@@ -1,23 +1,11 @@
+#include "menu/imgui_hook.h"
 #include <MinHook.h>
 #include <thread>
-#include "menu/imgui_hook.h"
 
-namespace offests {
-    constexpr uintptr_t MAX_HP             = 0x339250;
-    constexpr uintptr_t ATK_SPEED          = 0x339220;
-    constexpr uintptr_t TAKE_DAMAGE        = 0x339980;
-    constexpr uintptr_t UNLOCK_STAFFS      = 0x3374F0;
-    constexpr uintptr_t UNLOCK_HATS        = 0x337290;
-    constexpr uintptr_t SET_DAMAGE         = 0x339230;
-    constexpr uintptr_t SHOOT_FN           = 0x335CC0;
-    constexpr uintptr_t SELECTED_STAFF     = 0x338910;
-    constexpr uintptr_t SELECTED_STAFF_IDX = 0x338EB0;
-
-
-}; // namespace offests
-
+// TODO: mem. module and refactor hooked fn 
 uintptr_t MODULE_BASE = (uintptr_t) GetModuleHandle("GameAssembly.dll");
 
+#pragma region Hooks
 void(__fastcall* SetMaxHP_Original)(DWORD*, int32_t, DWORD*);
 void __stdcall SetMaxHp_Hook(DWORD* __this, int32_t _val, DWORD* __methodInfo) {
 
@@ -52,7 +40,8 @@ bool __stdcall AllHatsUnlocked_Hook(DWORD* __this, DWORD* __methodInfo) {
 
 void __stdcall TakeDamage_Hook(DWORD* __this, float _dmg, DWORD* __methodInfo) {
 
-    _dmg = 0.0f;
+    printf("PlayerStats_o* %p took %f damage\n", (uintptr_t) __this, _dmg);
+    _dmg = configs::bInvulnerable ? 0.0f : _dmg;
 
     return TakeDamage_Original(__this, _dmg, __methodInfo);
 }
@@ -68,7 +57,7 @@ void __stdcall SetDamage_Hook(DWORD* __this, float _val, DWORD* __methodInfo) {
 void(__fastcall* Shoot_Original)(DWORD*, DWORD*);
 
 void __stdcall Shoot_Hook(DWORD* __this, DWORD* __methodInfo) {
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < configs::shootsQuantity; ++i) {
         Shoot_Original(__this, __methodInfo);
     }
 }
@@ -83,9 +72,10 @@ bool __stdcall HasSelectedStaff_Hook(DWORD* __this, DWORD* __methodInfo) {
 void(__fastcall* SelectStaffWithIndex_Original)(DWORD*, int32_t, DWORD*);
 
 void __stdcall SelectStaffWithIndex_Hook(DWORD* __this, int32_t _index, DWORD* __methodInfo) {
-    _index = 7;
+    _index = configs::selectedStaff;
     return SelectStaffWithIndex_Original(__this, _index, __methodInfo);
 }
+#pragma endregion
 
 
 static unsigned long FakeEntry(HMODULE _hModule) {
@@ -105,8 +95,8 @@ static unsigned long FakeEntry(HMODULE _hModule) {
     MH_CreateHook(reinterpret_cast<LPVOID*>(MODULE_BASE + offests::TAKE_DAMAGE), &TakeDamage_Hook,
         reinterpret_cast<LPVOID*>(&TakeDamage_Original));
 
-    MH_CreateHook(reinterpret_cast<LPVOID*>(MODULE_BASE + offests::UNLOCK_STAFFS), &AllStaffsUnlocked_Hook,
-        reinterpret_cast<LPVOID*>(&AllStaffsUnlocked_Original));
+    MH_CreateHook(reinterpret_cast<void**>(MODULE_BASE + offests::UNLOCK_STAFFS), &AllStaffsUnlocked_Hook,
+        reinterpret_cast<void**>(&AllStaffsUnlocked_Original));
 
     MH_CreateHook(reinterpret_cast<LPVOID*>(MODULE_BASE + offests::SET_DAMAGE), &SetDamage_Hook,
         reinterpret_cast<LPVOID*>(&SetDamage_Original));
@@ -122,15 +112,15 @@ static unsigned long FakeEntry(HMODULE _hModule) {
 
     MH_EnableHook(MH_ALL_HOOKS);
 
-    bool init_hook = false;
+    bool bInitKiero = false;
     do {
         if (kiero::init(kiero::RenderType::D3D11) == kiero::Status::Success) {
-            kiero::bind(8, (void**) &ImGuiHook::Present_Original, Present_Hook);
-            init_hook = true;
+            kiero::bind(8, (void**) &imguihook::Present_Original, Present_Hook);
+            bInitKiero = true;
         }
-    } while (!init_hook);
+    } while (!bInitKiero);
 
-    while (!GetAsyncKeyState(VK_END)) {
+    while (!configs::bWindowShouldClose || GetAsyncKeyState(VK_END)) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
@@ -141,6 +131,7 @@ static unsigned long FakeEntry(HMODULE _hModule) {
 
     FreeLibraryAndExitThread(_hModule, NULL);
 }
+
 
 BOOL APIENTRY DllMain(HMODULE _hModule, DWORD ul_reason_for_call, LPVOID _lpReserved) {
     UNREFERENCED_PARAMETER(_lpReserved);
@@ -158,7 +149,8 @@ BOOL APIENTRY DllMain(HMODULE _hModule, DWORD ul_reason_for_call, LPVOID _lpRese
 
     if (ul_reason_for_call == DLL_PROCESS_DETACH) {
         kiero::shutdown();
-        SetWindowLongPtr(ImGuiHook::window, GWLP_WNDPROC, (LONG_PTR) ImGuiHook::oWndProc); // COMMENT: restore the original WndProc
+        SetWindowLongPtr(
+            imguihook::window, GWLP_WNDPROC, (LONG_PTR) imguihook::oWndProc); // COMMENT: restore the original WndProc
         return TRUE;
     }
 

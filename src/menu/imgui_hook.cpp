@@ -1,20 +1,12 @@
 #include "imgui_hook.h"
 
 
-bool bMenuOpened = false;
-
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-namespace ImGuiHook {
 
-    Present Present_Original                             = nullptr;
-    WNDPROC oWndProc                             = nullptr;
-    ID3D11Device* pDevice                        = nullptr;
-    ID3D11DeviceContext* pContext                = nullptr;
-    ID3D11RenderTargetView* mainRenderTargetView = nullptr;
-    HWND window                                  = nullptr;
+namespace imguihook {
 
-    bool bInitialized = false;
+   
     void Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* context) {
         window   = hwnd;
         pDevice  = device;
@@ -39,31 +31,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam)) {
         return true;
     }
-    return CallWindowProc(ImGuiHook::oWndProc, hWnd, uMsg, wParam, lParam);
+    return CallWindowProc(imguihook::oWndProc, hWnd, uMsg, wParam, lParam);
 }
 
 HRESULT __stdcall Present_Hook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
     if (GetAsyncKeyState(VK_INSERT) & 1) {
-        bMenuOpened = !bMenuOpened;
+        configs::bMenuOpened = !configs::bMenuOpened;
     }
 
-    if (!ImGuiHook::bInitialized) {
-        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**) &ImGuiHook::pDevice))) {
-            ImGuiHook::pDevice->GetImmediateContext(&ImGuiHook::pContext);
+    if (!imguihook::bInitialized) {
+        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**) &imguihook::pDevice))) {
+            imguihook::pDevice->GetImmediateContext(&imguihook::pContext);
             DXGI_SWAP_CHAIN_DESC sd;
             pSwapChain->GetDesc(&sd);
-            ImGuiHook::window = sd.OutputWindow;
+            imguihook::window = sd.OutputWindow;
+            sd.BufferCount    = 2; // COMMENT: Double buffering
 
             ID3D11Texture2D* pBackBuffer;
             pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*) &pBackBuffer);
-            ImGuiHook::pDevice->CreateRenderTargetView(pBackBuffer, NULL, &ImGuiHook::mainRenderTargetView);
+            imguihook::pDevice->CreateRenderTargetView(pBackBuffer, NULL, &imguihook::mainRenderTargetView);
             pBackBuffer->Release();
 
-            ImGuiHook::oWndProc = (WNDPROC) SetWindowLongPtr(ImGuiHook::window, GWLP_WNDPROC, (LONG_PTR) WndProc);
-            ImGuiHook::Initialize(ImGuiHook::window, ImGuiHook::pDevice, ImGuiHook::pContext);
-            ImGuiHook::bInitialized = true;
+            imguihook::oWndProc = (WNDPROC) SetWindowLongPtr(imguihook::window, GWLP_WNDPROC, (LONG_PTR) WndProc);
+            imguihook::Initialize(imguihook::window, imguihook::pDevice, imguihook::pContext);
+            imguihook::bInitialized = true;
         } else {
-            return ImGuiHook::Present_Original(pSwapChain, SyncInterval, Flags);
+            return imguihook::Present_Original(pSwapChain, SyncInterval, Flags);
         }
     }
 
@@ -71,15 +64,11 @@ HRESULT __stdcall Present_Hook(IDXGISwapChain* pSwapChain, UINT SyncInterval, UI
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    if (bMenuOpened) {
-        ImGui::Begin("ImGui Kiero");
-        ImGui::Text("Hello world");
-        ImGui::End();
-    }
-
+    menu::Render();
+    
     ImGui::Render();
-    ImGuiHook::pContext->OMSetRenderTargets(1, &ImGuiHook::mainRenderTargetView, NULL);
+    imguihook::pContext->OMSetRenderTargets(1, &imguihook::mainRenderTargetView, NULL);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-    return ImGuiHook::Present_Original(pSwapChain, SyncInterval, Flags);
+    return imguihook::Present_Original(pSwapChain, SyncInterval, Flags);
 }
