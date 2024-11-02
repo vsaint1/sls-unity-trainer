@@ -3,5 +3,5 @@
 Simple trainer made for unity
 
 
-<img src="examples/funny.png>
+<img src="examples/funny.png">
 
