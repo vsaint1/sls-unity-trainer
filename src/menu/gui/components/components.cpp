@@ -1,4 +1,4 @@
-#include "components.h"
+#include "menu/gui/components/components.h"
 
 namespace gui {
     void ToolTip(const char* text) {

@@ -2,7 +2,7 @@
 #define MENU_HPP
 
 #include "components/components.h"
-#include "../../globals.h"
+#include "sdk/fn.h"
 
 namespace menu {
 

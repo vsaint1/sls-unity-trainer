@@ -1,8 +1,7 @@
-#include "menu.h"
+#include "menu/gui/menu.h"
 
 
 namespace menu {
-    // TODO
     void Setup() {
         printf("Setting up colors\n");
     }
@@ -27,6 +26,13 @@ namespace menu {
 
             ImGui::Button("Unlock All Staffs");
             ImGui::Button("Unlock All Hats");
+
+            if (ImGui::InputInt("Coins", &configs::coins, 50, 1000)) {
+                spdlog::info("Adding coins");
+                
+                fn::AddCoins(configs::coins);
+            }
+
 
             if (ImGui::Button("Close")) {
                 configs::bWindowShouldClose = true;
